@@ -180,7 +180,7 @@ export const RoadmapView: React.FC = () => {
     try {
       const response = await fetch('/api/ai/generate-roadmap', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
           targetRole,
           currentSkills: user?.skills || [],
@@ -189,15 +189,16 @@ export const RoadmapView: React.FC = () => {
         }),
       });
 
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to generate roadmap.');
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await response.json();
+        if (data.data) {
+          setRoadmap(data.data);
+          return;
+        }
       }
-
-      setRoadmap(data.data);
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Error contacting roadmap generation engine.');
+      console.warn('Roadmap backend call failed, maintaining sprint plan:', err.message);
     } finally {
       setLoading(false);
     }

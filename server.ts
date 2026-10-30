@@ -55,6 +55,31 @@ async function generateGeminiContent(
   return response.text || '';
 }
 
+// Resilient JSON extractor that parses pure JSON, markdown fences, or embedded JSON blocks
+function safeParseJson<T = any>(rawText: string): T | null {
+  if (!rawText || typeof rawText !== 'string') return null;
+
+  try {
+    const cleaned = rawText
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+    return JSON.parse(cleaned);
+  } catch {
+    try {
+      const firstBrace = rawText.indexOf('{');
+      const lastBrace = rawText.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        return JSON.parse(rawText.substring(firstBrace, lastBrace + 1));
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+}
+
 // 1. Health check & configuration status
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({
@@ -120,15 +145,11 @@ Return a strictly valid JSON object (no markdown code blocks, pure JSON) with th
           5500
         );
 
-        // Clean up markdown block if model wrapped in ```json
-        const cleaned = textResponse
-          .replace(/^```json\s*/i, '')
-          .replace(/^```\s*/i, '')
-          .replace(/\s*```$/i, '')
-          .trim();
-
-        const parsed = JSON.parse(cleaned);
-        return res.json({ success: true, data: parsed, isAiGenerated: true });
+        const parsed = safeParseJson(textResponse);
+        if (parsed) {
+          return res.json({ success: true, data: parsed, isAiGenerated: true });
+        }
+        console.warn('Gemini response could not be parsed as JSON, falling back to heuristic engine.');
       } catch (geminiError: any) {
         console.warn('Gemini API call failed, falling back to heuristic engine:', geminiError?.message);
       }
@@ -286,13 +307,11 @@ Return a strictly valid JSON object (no markdown, pure JSON) with the following 
           true,
           5500
         );
-        const cleaned = textResponse
-          .replace(/^```json\s*/i, '')
-          .replace(/^```\s*/i, '')
-          .replace(/\s*```$/i, '')
-          .trim();
-        const parsed = JSON.parse(cleaned);
-        return res.json({ success: true, data: parsed, isAiGenerated: true });
+        const parsed = safeParseJson(textResponse);
+        if (parsed) {
+          return res.json({ success: true, data: parsed, isAiGenerated: true });
+        }
+        console.warn('Gemini response could not be parsed as JSON for skill-gap, using heuristic model.');
       } catch (geminiError: any) {
         console.warn('Gemini API call failed for skill gap:', geminiError?.message);
       }
@@ -599,13 +618,11 @@ Return a strictly valid JSON object (no markdown, pure JSON) with this shape:
           true,
           5500
         );
-        const cleaned = textResponse
-          .replace(/^```json\s*/i, '')
-          .replace(/^```\s*/i, '')
-          .replace(/\s*```$/i, '')
-          .trim();
-        const parsed = JSON.parse(cleaned);
-        return res.json({ success: true, data: parsed, isAiGenerated: true });
+        const parsed = safeParseJson(textResponse);
+        if (parsed) {
+          return res.json({ success: true, data: parsed, isAiGenerated: true });
+        }
+        console.warn('Gemini interview evaluation could not be parsed, using heuristic model.');
       } catch (geminiError: any) {
         console.warn('Gemini interview evaluation error:', geminiError?.message);
       }
@@ -689,13 +706,11 @@ Return a strictly valid JSON object (no markdown, pure JSON):
           true,
           5500
         );
-        const cleaned = textResponse
-          .replace(/^```json\s*/i, '')
-          .replace(/^```\s*/i, '')
-          .replace(/\s*```$/i, '')
-          .trim();
-        const parsed = JSON.parse(cleaned);
-        return res.json({ success: true, data: parsed, isAiGenerated: true });
+        const parsed = safeParseJson(textResponse);
+        if (parsed) {
+          return res.json({ success: true, data: parsed, isAiGenerated: true });
+        }
+        console.warn('Gemini roadmap could not be parsed, using structured sprint model.');
       } catch (geminiError: any) {
         console.warn('Gemini roadmap generation error:', geminiError?.message);
       }
@@ -808,6 +823,15 @@ Return a strictly valid JSON object (no markdown, pure JSON):
   }
 });
 
+// Global API error handler ensuring JSON response
+app.use('/api', (err: any, req: Request, res: Response, _next: any) => {
+  console.error('[API Error Caught]:', err);
+  res.status(500).json({
+    success: false,
+    error: err?.message || 'Internal server error occurred',
+  });
+});
+
 // Setup Vite middleware in development or serve static in production
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
@@ -831,6 +855,12 @@ async function startServer() {
   });
 }
 
-startServer().catch(err => {
-  console.error('Failed to start server:', err);
-});
+// Start standalone server unless invoked as a serverless function (e.g. Vercel)
+if (process.env.VERCEL !== '1' && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  startServer().catch(err => {
+    console.error('Failed to start server:', err);
+  });
+}
+
+export default app;
+export { app };

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { CareerRole, ExperienceLevel, SkillGapData } from '../types';
+import { safePostJson, generateClientSkillGap } from '../utils/apiClient';
 import {
   Target,
   Sparkles,
@@ -88,29 +89,24 @@ export const SkillGapView: React.FC = () => {
     }, 1500);
 
     try {
-      const response = await fetch('/api/ai/skill-gap', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const result = await safePostJson<SkillGapData>(
+        '/api/ai/skill-gap',
+        {
           targetRole,
           currentSkills: skillsToAnalyze,
           experienceLevel,
-        }),
-      });
+        },
+        () => generateClientSkillGap(targetRole, skillsToAnalyze, experienceLevel)
+      );
 
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to analyze skills.');
-      }
-
-      setGapData(data.data);
+      setGapData(result.data);
 
       setTimeout(() => {
         resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Error occurred while contacting skill intelligence engine.');
+      setError(err.message || 'Error occurred while analyzing skills.');
     } finally {
       clearTimeout(stepTimer);
       setLoading(false);

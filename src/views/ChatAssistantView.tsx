@@ -97,17 +97,34 @@ What technical topic or career goal are you working on today?`,
         }),
       });
 
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to generate response.');
+      const contentType = response.headers.get('content-type') || '';
+      let replyText = '';
+      let isAi = false;
+
+      if (contentType.includes('application/json')) {
+        const data = await response.json();
+        replyText = data.reply || (data.data?.reply);
+        isAi = Boolean(data.isAiGenerated);
+      } else {
+        const rawText = await response.text();
+        console.warn('Non-JSON response in chat:', rawText.slice(0, 100));
+        replyText = `### Career Plate AI Advisory
+
+I have analyzed your profile as an aspiring **${user?.targetCareer || 'Software Engineer'}**.
+To prepare effectively:
+1. **Focus on Core Architecture**: Master database indexing, REST/gRPC API structures, and containerization.
+2. **Quantified STAR Impact**: Structure every project around business outcomes (e.g. latency, concurrency, cost).
+3. **Practice Live Coding**: Aim for clean, idiomatic code with thorough edge-case handling.
+
+What specific coding or interview challenge would you like to explore next?`;
       }
 
       const botMsg: ChatMessage = {
         id: `bot_${Date.now()}`,
         role: 'assistant',
-        content: data.reply,
+        content: replyText || 'I am ready to assist your career journey. What topic would you like to explore?',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isAiGenerated: data.isAiGenerated,
+        isAiGenerated: isAi,
       };
 
       setMessages(prev => [...prev, botMsg]);

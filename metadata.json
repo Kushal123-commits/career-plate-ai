@@ -2,5 +2,7 @@
   "name": "Career Plate AI",
   "description": "Your AI-Powered Career Companion: resume analyzer, skill gap analyzer, interview preparation, career roadmap, and Gemini career assistant.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

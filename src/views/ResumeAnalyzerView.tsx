@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { ResumeAnalysisData, CareerRole } from '../types';
+import { safePostJson, generateClientResumeAnalysis } from '../utils/apiClient';
 import {
   FileText,
   Upload,
@@ -216,22 +217,17 @@ Automated CI/CD Pipeline for Microservices
     }, 2800);
 
     try {
-      const response = await fetch('/api/ai/resume-analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const result = await safePostJson<ResumeAnalysisData>(
+        '/api/ai/resume-analyze',
+        {
           resumeText: textToAnalyze,
           targetRole,
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to analyze resume.');
-      }
+        },
+        () => generateClientResumeAnalysis(textToAnalyze, targetRole)
+      );
 
       setAnalysisResult({
-        ...data.data,
+        ...result.data,
         fileName: fileName || `${targetRole.replace(/\s+/g, '_')}_Resume.txt`,
         analyzedAt: new Date().toLocaleDateString(),
       });
@@ -242,7 +238,7 @@ Automated CI/CD Pipeline for Microservices
       }, 100);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Error occurred while contacting AI analysis engine.');
+      setError(err.message || 'Error occurred while analyzing resume.');
     } finally {
       clearTimeout(stepTimer1);
       clearTimeout(stepTimer2);
