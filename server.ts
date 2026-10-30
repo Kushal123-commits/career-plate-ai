@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 
 dotenv.config();
 
@@ -26,22 +26,32 @@ const ai = new GoogleGenAI({
   },
 });
 
-// Helper for calling Gemini with fallback if key is missing or quota exceeded
-async function generateGeminiContent(prompt: string, systemInstruction?: string): Promise<string> {
+// Helper for calling Gemini with fast response timeout and low thinking
+async function generateGeminiContent(
+  prompt: string,
+  systemInstruction?: string,
+  jsonMode: boolean = false,
+  timeoutMs: number = 6000
+): Promise<string> {
   if (!apiKey) {
     throw new Error('NO_API_KEY');
   }
 
-  const response = await ai.models.generateContent({
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('GEMINI_TIMEOUT')), timeoutMs)
+  );
+
+  const callPromise = ai.models.generateContent({
     model: 'gemini-3.8-flash',
     contents: prompt,
-    config: systemInstruction
-      ? {
-          systemInstruction,
-        }
-      : undefined,
+    config: {
+      ...(systemInstruction ? { systemInstruction } : {}),
+      ...(jsonMode ? { responseMimeType: 'application/json' } : {}),
+      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+    },
   });
 
+  const response = await Promise.race([callPromise, timeoutPromise]);
   return response.text || '';
 }
 
@@ -105,7 +115,9 @@ Return a strictly valid JSON object (no markdown code blocks, pure JSON) with th
       try {
         const textResponse = await generateGeminiContent(
           `Target Role: ${targetRole}\n\nResume Content:\n${resumeText.slice(0, 8000)}`,
-          systemPrompt
+          systemPrompt,
+          true,
+          5500
         );
 
         // Clean up markdown block if model wrapped in ```json
@@ -270,7 +282,9 @@ Return a strictly valid JSON object (no markdown, pure JSON) with the following 
       try {
         const textResponse = await generateGeminiContent(
           `Target Role: ${targetRole}\nLevel: ${experienceLevel}\nCurrent Skills: ${currentSkills.join(', ')}`,
-          systemPrompt
+          systemPrompt,
+          true,
+          5500
         );
         const cleaned = textResponse
           .replace(/^```json\s*/i, '')
@@ -581,7 +595,9 @@ Return a strictly valid JSON object (no markdown, pure JSON) with this shape:
       try {
         const textResponse = await generateGeminiContent(
           `Question: ${question}\nCandidate Answer: ${userAnswer}`,
-          systemPrompt
+          systemPrompt,
+          true,
+          5500
         );
         const cleaned = textResponse
           .replace(/^```json\s*/i, '')
@@ -669,7 +685,9 @@ Return a strictly valid JSON object (no markdown, pure JSON):
       try {
         const textResponse = await generateGeminiContent(
           `Target: ${targetRole}, Daily Hours: ${dailyHours}, Level: ${experienceLevel}, Skills: ${currentSkills.join(', ')}`,
-          systemPrompt
+          systemPrompt,
+          true,
+          5500
         );
         const cleaned = textResponse
           .replace(/^```json\s*/i, '')

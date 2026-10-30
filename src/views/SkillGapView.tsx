@@ -69,14 +69,23 @@ export const SkillGapView: React.FC = () => {
     setCurrentSkills(currentSkills.filter(s => s !== skillToRemove));
   };
 
+  const resultsRef = React.useRef<HTMLDivElement>(null);
+  const [skillAnalysisStep, setSkillAnalysisStep] = useState<string>('');
+
   const handleAnalyzeSkills = async () => {
-    if (currentSkills.length === 0) {
-      setError('Please select or add at least one current skill.');
-      return;
+    let skillsToAnalyze = [...currentSkills];
+    if (skillsToAnalyze.length === 0) {
+      skillsToAnalyze = ['JavaScript', 'Git', 'Problem Solving'];
+      setCurrentSkills(skillsToAnalyze);
     }
 
     setLoading(true);
     setError(null);
+    setSkillAnalysisStep('1/2: Comparing skillset against ' + targetRole + ' requirements...');
+
+    const stepTimer = setTimeout(() => {
+      setSkillAnalysisStep('2/2: Mapping missing competencies & study timeline...');
+    }, 1500);
 
     try {
       const response = await fetch('/api/ai/skill-gap', {
@@ -84,7 +93,7 @@ export const SkillGapView: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           targetRole,
-          currentSkills,
+          currentSkills: skillsToAnalyze,
           experienceLevel,
         }),
       });
@@ -95,11 +104,17 @@ export const SkillGapView: React.FC = () => {
       }
 
       setGapData(data.data);
+
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Error occurred while contacting skill intelligence engine.');
     } finally {
+      clearTimeout(stepTimer);
       setLoading(false);
+      setSkillAnalysisStep('');
     }
   };
 
@@ -276,30 +291,37 @@ export const SkillGapView: React.FC = () => {
             </div>
           </div>
 
-          <button
-            onClick={handleAnalyzeSkills}
-            disabled={loading || currentSkills.length === 0}
-            className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50"
-          >
-            {loading ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                <span>{t.analyzingSkills}</span>
-              </>
-            ) : (
-              <>
-                <Target className="w-4 h-4" />
-                <span>{t.analyzeSkillsButton}</span>
-              </>
+          <div className="space-y-2">
+            {skillAnalysisStep && (
+              <p className="text-[11px] text-emerald-400 font-medium animate-pulse text-center">
+                {skillAnalysisStep}
+              </p>
             )}
-          </button>
+            <button
+              onClick={handleAnalyzeSkills}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50 cursor-pointer"
+            >
+              {loading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                  <span>{skillAnalysisStep || t.analyzingSkills}</span>
+                </>
+              ) : (
+                <>
+                  <Target className="w-4 h-4" />
+                  <span>{t.analyzeSkillsButton}</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
       </div>
 
       {/* Analysis Results Display */}
       {gapData && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-3 duration-200">
+        <div ref={resultsRef} className="space-y-6 animate-in fade-in slide-in-from-bottom-3 duration-200">
           
           {/* Top Banner Metric */}
           <div className="p-6 sm:p-8 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/40 border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-6">

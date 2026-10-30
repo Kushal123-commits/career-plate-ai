@@ -191,21 +191,36 @@ Automated CI/CD Pipeline for Microservices
     }
   };
 
+  const resultsRef = React.useRef<HTMLDivElement>(null);
+  const [analysisStep, setAnalysisStep] = useState<string>('');
+
   const handleRunAnalysis = async () => {
-    if (!resumeText || resumeText.trim().length < 20) {
-      setError('Please upload a resume file or load a sample resume first.');
-      return;
+    let textToAnalyze = resumeText.trim();
+    if (!textToAnalyze || textToAnalyze.length < 20) {
+      // Auto-load default candidate resume if empty so user is never blocked
+      textToAnalyze = sampleResumes.junior;
+      setResumeText(sampleResumes.junior);
+      setFileName('Junior_FullStack_Sample.txt');
     }
 
     setLoading(true);
     setError(null);
+    setAnalysisStep('1/3: Parsing document content & extracting skills...');
+
+    const stepTimer1 = setTimeout(() => {
+      setAnalysisStep('2/3: Calculating ATS score & keyword match against ' + targetRole + '...');
+    }, 1200);
+
+    const stepTimer2 = setTimeout(() => {
+      setAnalysisStep('3/3: Synthesizing STAR bullet rewrites & improvement report...');
+    }, 2800);
 
     try {
       const response = await fetch('/api/ai/resume-analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          resumeText,
+          resumeText: textToAnalyze,
           targetRole,
         }),
       });
@@ -220,11 +235,19 @@ Automated CI/CD Pipeline for Microservices
         fileName: fileName || `${targetRole.replace(/\s+/g, '_')}_Resume.txt`,
         analyzedAt: new Date().toLocaleDateString(),
       });
+
+      // Smoothly scroll down to the results section so the user instantly sees what happened
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Error occurred while contacting AI analysis engine.');
     } finally {
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
       setLoading(false);
+      setAnalysisStep('');
     }
   };
 
@@ -426,30 +449,37 @@ Hacktoberfest 2026 Special Release
             />
           </div>
 
-          <button
-            onClick={handleRunAnalysis}
-            disabled={loading || !resumeText}
-            className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-50"
-          >
-            {loading ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                <span>{t.analyzingText}</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                <span>{t.analyzeButton}</span>
-              </>
+          <div className="space-y-2">
+            {analysisStep && (
+              <p className="text-[11px] text-blue-400 font-medium animate-pulse text-center">
+                {analysisStep}
+              </p>
             )}
-          </button>
+            <button
+              onClick={handleRunAnalysis}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
+            >
+              {loading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                  <span>{analysisStep || t.analyzingText}</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  <span>{t.analyzeButton}</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
       </div>
 
       {/* Analysis Results Display */}
       {analysisResult && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-3 duration-200">
+        <div ref={resultsRef} className="space-y-6 animate-in fade-in slide-in-from-bottom-3 duration-200">
           
           {/* Header Score Card */}
           <div className="p-6 sm:p-8 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-900/90 border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
